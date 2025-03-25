@@ -1,0 +1,39 @@
+name: Deploy to Kubernetes with ArgoCD
+
+on:
+  push:
+    branches:
+      - main  # Trigger the pipeline when changes are pushed to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the code from the repository
+      - name: Checkout code
+        uses: actions/checkout@v2  # This will pull the latest code from your repository
+
+      # Step 2: Set up Kubernetes
+      - name: Set up Kubernetes
+        uses: azure/setup-kubernetes@v1
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}  # Kubernetes config stored in GitHub secrets
+
+      # Step 3: Install ArgoCD CLI
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL https://github.com/argoproj/argo-cd/releases/download/v2.5.5/argocd-linux-amd64 -o argocd
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      # Step 4: Log into ArgoCD server
+      - name: Login to ArgoCD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} --username ${{ secrets.ARGOCD_USERNAME }} --password ${{ secrets.ARGOCD_PASSWORD }} --insecure
+
+      # Step 5: Sync the ArgoCD application
+      - name: Sync ArgoCD Application
+        run: |
+          argocd app sync api-app  # Replace 'api-app' with your actual app name in ArgoCD
+          argocd app wait api-app --timeout 300  # Wait for the app to be deployed successfully
