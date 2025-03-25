@@ -10,29 +10,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the code from the repository
+      # Step 1: Checkout code from the repository
       - name: Checkout code
-        uses: actions/checkout@v2  # This will pull the latest code from your repository
+        uses: actions/checkout@v2
 
-      # Step 2: Set up kubectl for interacting with Kubernetes
+      # Step 2: Set up Docker Buildx for building multi-platform images
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Step 3: Login to DockerHub (or any other container registry)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}  # GitHub Secret for Docker Username
+          password: ${{ secrets.DOCKER_PASSWORD }}  # GitHub Secret for Docker Password
+
+      # Step 4: Build the Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/api-app:${{ github.sha }} .
+      
+      # Step 5: Push the Docker image to Docker Hub (or other registry)
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/api-app:${{ github.sha }}
+
+      # Step 6: Set up kubectl for interacting with Kubernetes
       - name: Set up kubectl
         uses: actions/setup-kubectl@v2
         with:
           kubectl-version: '1.21'  # You can change this to the desired kubectl version
 
-      # Step 3: Install ArgoCD CLI
+      # Step 7: Install ArgoCD CLI
       - name: Install ArgoCD CLI
         run: |
           curl -sSL https://github.com/argoproj/argo-cd/releases/download/v2.5.5/argocd-linux-amd64 -o argocd
           chmod +x argocd
           sudo mv argocd /usr/local/bin/
 
-      # Step 4: Log into ArgoCD server
+      # Step 8: Log into ArgoCD using the secrets
       - name: Login to ArgoCD
         run: |
           argocd login ${{ secrets.ARGOCD_SERVER }} --username ${{ secrets.ARGOCD_USERNAME }} --password ${{ secrets.ARGOCD_PASSWORD }} --insecure
 
-      # Step 5: Sync the ArgoCD Application
+      # Step 9: Update ArgoCD Application to use the new image
+      - name: Update ArgoCD Application with new Docker image
+        run: |
+          kubectl set image deployment/api-app-fastapi-chart api-app-fastapi-chart=${{ secrets.DOCKER_USERNAME }}/api-app:${{ github.sha }} -n api
+
+      # Step 10: Sync the ArgoCD Application
       - name: Sync ArgoCD Application
         run: |
           argocd app sync api-app  # Replace 'api-app' with your actual app name in ArgoCD
