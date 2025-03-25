@@ -1,4 +1,4 @@
-name: Deploy to Kubernetes with Helm and ArgoCD
+name: Deploy to Kubernetes with ArgoCD
 
 on:
   push:
@@ -10,67 +10,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code from the repository
+      # Step 1: Checkout code
       - name: Checkout code
-        uses: actions/checkout@v2  # This will pull the latest code from your repository
+        uses: actions/checkout@v2
 
-      # Step 2: Set up Docker (DockerHub login is stored in GitHub secrets)
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      # Step 3: Log in to DockerHub
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      # Step 4: Build the Docker image and tag it
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/api-app:${{ github.sha }} .
-          docker tag ${{ secrets.DOCKER_USERNAME }}/api-app:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/api-app:latest
-
-      # Step 5: Push Docker image to Docker Hub
-      - name: Push Docker image to Docker Hub
-        run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/api-app:${{ github.sha }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/api-app:latest
-
-      # Step 6: Set up Kubernetes with kubectl
+      # Step 2: Set up Kubernetes
       - name: Set up Kubernetes
-        uses: actions/setup-kubectl@v2
-        with:
-          kubeconfig: ${{ secrets.KUBECONFIG }}  # Kubernetes config stored in GitHub secrets
-
-      # Step 7: Install Helm
-      - name: Install Helm
         run: |
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config  # Set kubeconfig from GitHub Secrets
 
-      # Step 8: Install ArgoCD CLI
+      # Step 3: Install ArgoCD CLI
       - name: Install ArgoCD CLI
         run: |
           curl -sSL https://github.com/argoproj/argo-cd/releases/download/v2.5.5/argocd-linux-amd64 -o argocd
           chmod +x argocd
           sudo mv argocd /usr/local/bin/
 
-      # Step 9: Log into ArgoCD server
+      # Step 4: Log into ArgoCD server
       - name: Login to ArgoCD
         run: |
           argocd login ${{ secrets.ARGOCD_SERVER }} --username ${{ secrets.ARGOCD_USERNAME }} --password ${{ secrets.ARGOCD_PASSWORD }} --insecure
 
-      # Step 10: Update the Helm chart values with the new Docker image tag
-      - name: Update Helm chart values
-        run: |
-          sed -i "s|<your-docker-repo>/<your-app-name>:.*|${{ secrets.DOCKER_USERNAME }}/api-app:${{ github.sha }}|g" ./fastapi-chart/values.yaml
-
-      # Step 11: Deploy using Helm chart
-      - name: Deploy Helm Chart
-        run: |
-          helm upgrade --install api-app ./fastapi-chart --namespace api --create-namespace  # Adjust the chart path if needed
-
-      # Step 12: Sync the ArgoCD application
+      # Step 5: Sync ArgoCD Application
       - name: Sync ArgoCD Application
         run: |
           argocd app sync api-app  # Replace 'api-app' with your actual app name in ArgoCD
